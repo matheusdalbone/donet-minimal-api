@@ -4,6 +4,7 @@ using Microsoft.Identity.Client;
 using minimal_api.Dominio.DTOs;
 using minimal_api.Dominio.Entidades;
 using minimal_api.Dominio.Interfaces;
+using minimal_api.Dominio.ModelViews;
 using minimal_api.Infraestrutura.DB;
 using minimal_api.Infraestrutura.Servicos;
 using minimal_api.Migrations;
@@ -20,7 +21,7 @@ builder.Services.AddDbContext<DbContexto>(options =>
 builder.Services.AddScoped<iAdminstradorServico, AdminstradorServico>();
 builder.Services.AddScoped<iVeiculoServico, VeiculoServico>();
 
-var app = builder.Build();
+var app = builder.Build();  
 
 if (app.Environment.IsDevelopment())
 {
@@ -30,14 +31,32 @@ if (app.Environment.IsDevelopment())
 
 app.MapPost("/login", ([FromBody] LoginDTO loginDTO, iAdminstradorServico administrador) =>
 {
+
     if (administrador.Login(loginDTO) != null)
         return Results.Ok("Logado com sucesso");
     else
         return Results.Unauthorized();
 });
 
+#region Veiculos
+
 app.MapPost("/veiculos", (iVeiculoServico veiculoService, Veiculo veiculo) =>
 {
+
+    var validacao = new ErrosDeValidação();
+
+    if (string.IsNullOrEmpty(veiculo.Nome))
+        validacao.Mensagens.Add("O Nome não pode ser vazio");
+
+    if (string.IsNullOrEmpty(veiculo.Marca))
+        validacao.Mensagens.Add("A marca não pode ser vazio");
+
+    if (veiculo.Ano < 1)
+        validacao.Mensagens.Add("O ano não pode ser vazio");
+
+    if (validacao.Mensagens.Count > 0)
+        return Results.BadRequest(validacao);
+
     if (veiculoService.Incluir(veiculo) != null)
         return Results.Ok(veiculo);
     else
@@ -72,9 +91,20 @@ app.MapDelete("/veiculos/{id:int}", (int id, iVeiculoServico veiculoService) =>
         return Results.NotFound();
 });
 
-app.MapPut("veiculos/{id:int}", (int id, iVeiculoServico veiculoServico) =>
+app.MapPut("veiculos/{id:int}", (int id, VeiculoDTO veiculoDTO,iVeiculoServico veiculoServico) =>
 {
+    var veiculo = veiculoServico.BuscarPorId(id);
+    if (veiculo != null)
+    {
+        veiculo.Nome = veiculoDTO.Nome;
+        veiculo.Marca = veiculoDTO.Marca;
+        veiculo.Ano = veiculoDTO.Ano;
+        veiculoServico.Atualizar(veiculo);
 
+        return Results.Ok(veiculo);
+    }
+
+    else return Results.NotFound();
 });
 
 
